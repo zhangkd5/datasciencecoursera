@@ -1,0 +1,92 @@
+---
+title: 'Course Project: Practical Machine Learning'
+author: "Kaidong Zhang"
+date: "Sunday, May 24, 2015"
+output:
+  html_document:
+    theme: united
+---
+
+## Introduction
+
+This project aims at predicting the manner of doing weight lifting exercises using the given dataset. 
+
+## Data
+```{r include=FALSE}
+library(caret)
+```
+
+First we loaded the data from the csv file provided. Note that there are `#DIV/0!` values in the table which should be also regarded as NA values.
+
+```{r eval=FALSE}
+trainData = read.csv("pml-training.csv", na.strings=c("NA", "#DIV/0!"))
+dim(trainData)
+```
+
+```{r echo=FALSE}
+dim(trainData)
+```
+
+Then we selected all the useful features in the dataset, leaving out the variables that are irrelavent or useless, e.g. statistical variables of the window etc.
+```{r}
+varnames = grep("^([ugpyt]|ac|ro|mag)", x=names(trainData), value=TRUE)
+length(varnames)
+head(varnames)
+```
+
+Next, we separated the dataset into a training set, which contains 75% of the data, and a testing set. The response variable "classe" is extracted to be a separate factor variable.
+```{r eval=FALSE}
+inTrain = createDataPartition(trainData$classe, p=0.75, list=FALSE)
+TrainFeatures = trainData[inTrain,varnames]
+TrainClasse = trainData[inTrain,"classe"]
+TestFeatures = trainData[-inTrain,varnames]
+TestClasse = trainData[-inTrain,"classe"]
+
+dim(TrainFeatures); dim(TestFeatures)
+```
+
+```{r echo=FALSE}
+dim(TrainFeatures); dim(TestFeatures)
+```
+
+We used the training set to train our model and then apply the model on the testing set to analyze its performance.
+
+## Algorithm selection
+
+In this project, we used random forest as our machine learning algorithm. The reason of choosing this algorithm is that it is very accurate and it does not require assumptions on the probability distributions of features, thus we do not need to much pre-processing on the data. 
+
+Random forest enabled us to select a re-sampling size smaller than the size of the data set. We set the sample size to be 5000, which is about a third of the size of the training set. The number of trees "ntree" is set to be 250, which is large enough to stablize the OOB error. 
+
+## Model Training
+
+In the model training process, we use the bootstrap random sampling method to do the cross validation. Since the data is ordered in "classe" variable, a simple k-fold cross validation will result in sampling bias and therefore is not our choice. 
+
+```{r eval=FALSE}
+modFit = train(x=TrainFeatures, y=TrainClasse, 
+               method="rf", strata = TrainFeatures$user_name, 
+               sampsize=5000, ntree=250,
+               trControl=trainControl(method = "boot", number=15))
+modFit
+```
+
+```{r echo=FALSE}
+modFit
+```
+
+The final model is selected using the maximal accuracy, and corresponds to *mtry=27*. 
+
+## Performance on Testing set
+
+Next we applied our trained model to the testing set to obtain the out-of-sample error:
+
+```{r}
+pred = predict(modFit, newdata=TestFeatures)
+t1 = table(TestClasse, pred)
+prop.table(t1,1)
+accuracy = sum(pred==TestClasse)/length(TestClasse)
+1-accuracy # report out-of-sample error
+```
+
+The result shows that the out-of-sample error is about 0.4%, which indicates very high accuracy. 
+
+The confusion matrix also shows that for all classes, the accuracy of prediction is higher than 99%. For class A which is the correct exercise manner, the accuracy of prediction is as high as 99.8%.
